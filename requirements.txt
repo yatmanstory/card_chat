@@ -1,0 +1,8 @@
+langchain_chroma==1.1.0
+langchain_community==0.4.1
+langchain_core==1.2.22
+langchain_openai==1.1.12
+langchain_text_splitters==1.1.1
+python-dotenv==1.2.2
+streamlit==1.51.0
+streamlit_agraph==0.0.45

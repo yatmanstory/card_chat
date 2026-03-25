@@ -1,0 +1,8 @@
+.DS_Store
+__pycache__/
+*.pyc
+.venv/
+.env
+
+# ChromaDB 벡터 스토어 (자동 생성, 대용량)
+VectorStores_Card/
