@@ -129,6 +129,17 @@ def extract_consumption_pattern(user_text):
     # ]
 
 
+def format_fee(fee):
+    if not fee or fee == "-":
+        return "정보 없음"
+    if fee == "없음":
+        return "무료"
+    try:
+        return f"{int(fee):,}원"
+    except:
+        return fee  # 이미 문자열이면 그대로
+
+
 # [신규 추가 함수]
 # 기존에는 Supabase RPC가 UI에 필요한 모든 필드를 직접 반환했음.
 # ChromaDB는 Document 객체를 반환하므로, metadata에서 필드를 꺼내
@@ -337,7 +348,7 @@ def render_3_column_cards(cards):
                 # benefits_json 구조: [{"benefit_name": "카테고리명", "summary": "요약 텍스트"}]
                 # 수정함 : benefit_name(볼드), summary → 일반 텍스트로 시인성 고려해서 요약본을 출력하는 것으로 변경함
                 # 기존에는 혜택 상세 내용이 출력되었음
-                for b in card.get("benefits", []):
+                for b in card.get("benefits", [])[:-1]:
                     st.markdown(
                         f"""
                     <div style="display: flex; align-items: flex-start; margin-bottom: 12px; font-size: 0.85rem;">
@@ -359,7 +370,7 @@ def render_3_column_cards(cards):
                 <div style="background-color: #f3f4f6; border-radius: 8px; padding: 15px; text-align: left; margin-bottom: 15px;">
                     <div style="color: #6b7280; font-size: 0.75rem; font-weight: bold; margin-bottom: 5px;">연회비 (전월실적)</div>
                     <div style="color: #4338ca; font-size: 1.1rem; font-weight: 800;">
-                        {card.get('fee', '-')}원 <span style="font-size: 0.85rem; color: #6b7280; font-weight: 600;">({card.get('condition', '-')})</span>
+                        {format_fee(card.get("fee"))} <span style="font-size: 0.85rem; color: #6b7280; font-weight: 600;">({card.get('condition', '-')})</span>
                     </div>
                 </div>
                 """,
@@ -367,12 +378,11 @@ def render_3_column_cards(cards):
                 )
 
                 # 5. 하단 링크 버튼 (외부 URL로 이동)
-                btn_type = "primary" if i == 0 else "secondary"
                 st.link_button(
                     label=card.get("btn_text", "자세히 보기"),
                     url=card.get("detail_url", "#"),
                     use_container_width=True,
-                    type=btn_type,
+                    type="primary",
                 )
 
 
@@ -478,7 +488,7 @@ def render_mindmap_tab():
                         st.rerun()
 
                 st.write("---")
-                for b in card.get("benefits", []):
+                for b in card.get("benefits", [])[:-1]:
                     st.info(f"#### {b['benefit_name']}")
         else:
             st.info("왼쪽 마인드맵에서 원하시는 카테고리를 클릭해보세요!")
@@ -495,14 +505,23 @@ def main():
     # CSS 스타일링
     st.markdown(
         """
-    <style>
-        header {visibility: hidden;}
-        .block-container { padding-top: 1rem !important; padding-bottom: 5rem !important; max-width: 70rem; }
-        .stButton button { text-align: left; }
-        .stTabs [data-baseweb="tab-list"] { gap: 24px; }
-        .stTabs [data-baseweb="tab"] { height: 50px; white-space: pre-wrap; background-color: transparent; border-radius: 0px; border-bottom: 2px solid transparent; padding-top: 10px; padding-bottom: 10px; }
-        .stTabs [aria-selected="true"] { color: #1d4ed8 !important; border-bottom: 2px solid #1d4ed8 !important; font-weight: bold; }
-    </style>
+        <style>
+            header {visibility: hidden;}
+            .block-container { padding-top: 1rem !important; padding-bottom: 8rem !important; max-width: 70rem; }
+            .stButton button { text-align: left; }
+            .stTabs [data-baseweb="tab-list"] { gap: 24px; }
+            .stTabs [data-baseweb="tab"] { height: 50px; white-space: pre-wrap; background-color: transparent; border-radius: 0px; border-bottom: 2px solid transparent; padding-top: 10px; padding-bottom: 10px; }
+            .stTabs [aria-selected="true"] { color: #1d4ed8 !important; border-bottom: 2px solid #1d4ed8 !important; font-weight: bold; }
+            div[data-testid="stChatInput"] {
+                position: fixed !important;
+                bottom: 2rem !important;
+                left: 50% !important;
+                transform: translateX(-50%) !important;
+                width: calc(100% - 2rem) !important;
+                max-width: 66rem !important; /* 위쪽 채팅 컨텐츠 너비와 동일하게 맞춤 */
+                z-index: 999 !important;
+            }
+        </style>
     """,
         unsafe_allow_html=True,
     )
