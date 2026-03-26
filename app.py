@@ -67,7 +67,7 @@ def init_session_state():
         st.session_state.messages = [
             {
                 "role": "assistant",
-                "content": "안녕하세요! Financial Concierge입니다. 고객님의 소비 패턴(예: 배달, 교통, 쇼핑 등)이나 궁금한 점을 편하게 말씀해 주시면, 최적의 카드를 추천해 드립니다.",
+                "content": "안녕하세요! Card Concierge입니다. 고객님의 소비 패턴(예: 배달, 교통, 쇼핑 등)이나 궁금한 점을 편하게 말씀해 주시면, 최적의 카드를 추천해 드립니다.",
                 "cards": [],
             }
         ]
@@ -129,6 +129,17 @@ def extract_consumption_pattern(user_text):
     #     {"id": "transport", "label": "대중교통", "percent": 30},
     #     {"id": "shopping", "label": "온라인쇼핑", "percent": 20},
     # ]
+
+
+def format_fee(fee):
+    if not fee or fee == "-":
+        return "정보 없음"
+    if fee == "없음":
+        return "무료"
+    try:
+        return f"{int(fee):,}원"
+    except:
+        return fee + "원"  # 이미 문자열이면 그대로
 
 
 # [신규 추가 함수]
@@ -386,7 +397,7 @@ def render_3_column_cards(cards):
                 # benefits_json 구조: [{"benefit_name": "카테고리명", "summary": "요약 텍스트"}]
                 # 수정함 : benefit_name(볼드), summary → 일반 텍스트로 시인성 고려해서 요약본을 출력하는 것으로 변경함
                 # 기존에는 혜택 상세 내용이 출력되었음
-                for b in card.get("benefits", []):
+                for b in card.get("benefits", [])[:-1]:
                     st.markdown(
                         f"""
                     <div style="display: flex; align-items: flex-start; margin-bottom: 12px; font-size: 0.85rem;">
@@ -408,7 +419,7 @@ def render_3_column_cards(cards):
                 <div style="background-color: #f3f4f6; border-radius: 8px; padding: 15px; text-align: left; margin-bottom: 15px;">
                     <div style="color: #6b7280; font-size: 0.75rem; font-weight: bold; margin-bottom: 5px;">연회비 (전월실적)</div>
                     <div style="color: #4338ca; font-size: 1.1rem; font-weight: 800;">
-                        {card.get('fee', '-')}원 <span style="font-size: 0.85rem; color: #6b7280; font-weight: 600;">({card.get('condition', '-')})</span>
+                        {format_fee(card.get("fee"))} <span style="font-size: 0.85rem; color: #6b7280; font-weight: 600;">({card.get('condition', '-')})</span>
                     </div>
                 </div>
                 """,
@@ -416,12 +427,11 @@ def render_3_column_cards(cards):
                 )
 
                 # 5. 하단 링크 버튼 (외부 URL로 이동)
-                btn_type = "primary" if i == 0 else "secondary"
                 st.link_button(
                     label=card.get("btn_text", "자세히 보기"),
                     url=card.get("detail_url", "#"),
                     use_container_width=True,
-                    type=btn_type,
+                    type="primary",
                 )
 
 
@@ -429,7 +439,7 @@ def render_mindmap_tab():
     """Insights (나의 소비패턴) 탭 렌더링"""
     if not st.session_state.analysis_result:
         st.info(
-            "아직 분석된 소비 패턴이 없습니다. 'Portfolio' 탭에서 챗봇과 대화를 나누어 보세요!"
+            "아직 분석된 소비 패턴이 없습니다. 'Chat (카드 추천)' 탭에서 챗봇과 대화를 나누어 보세요!"
         )
         return
 
@@ -450,7 +460,12 @@ def render_mindmap_tab():
             )
             edges.append(Edge(source="root", target=cat["id"]))
 
-        config = Config(width="100%", height=450, directed=False, physics=True)
+        config = Config(
+            width="100%",
+            height=550,
+            directed=False,
+            physics={"enabled": True, "stabilization": {"iterations": 200}},
+        )
         clicked_id = agraph(nodes=nodes, edges=edges, config=config)
 
     with col2:
@@ -502,12 +517,12 @@ def render_mindmap_tab():
                     bg_style = (
                         f"background-image: url('{card.get('image_url')}'); background-size: cover; background-position: center;"
                         if card.get("image_url")
-                        else f"background: {card.get('gradient', '#ccc')};"
+                        else f"background: '#ccc');"
                     )
 
                     st.markdown(
                         f"""
-                        <div style="{bg_style} height: 200px; border-radius: 12px; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.1);"></div>
+                        <div style="{bg_style} height: 240px; border-radius: 12px; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.1);"></div>
                     """,
                         unsafe_allow_html=True,
                     )
@@ -527,8 +542,38 @@ def render_mindmap_tab():
                         st.rerun()
 
                 st.write("---")
-                for b in card.get("benefits", []):
-                    st.info(f"#### {b['benefit_name']}")
+
+                for b in card.get("benefits", [])[:-1]:
+                    st.markdown(
+                        f"""
+                        <div style="
+                            background: linear-gradient(135deg, #eef2ff, #e0e7ff);
+                            border-radius: 12px;
+                            padding: 16px 18px;
+                            margin-bottom: 12px;
+                            box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+                        ">
+                            <div style="
+                                font-size: 0.85rem;
+                                font-weight: 700;
+                                color: #4338ca;
+                                margin-bottom: 6px;
+                                letter-spacing: -0.3px;
+                            ">
+                                ✦ {b['benefit_name']}
+                            </div>
+                            <div style="
+                                font-size: 0.9rem;
+                                color: #374151;
+                                line-height: 1.5;
+                                font-weight: 500;
+                            ">
+                                {b.get('summary', '')}
+                            </div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
         else:
             st.info("왼쪽 마인드맵에서 원하시는 카테고리를 클릭해보세요!")
 
@@ -544,24 +589,33 @@ def main():
     # CSS 스타일링
     st.markdown(
         """
-    <style>
-        header {visibility: hidden;}
-        .block-container { padding-top: 1rem !important; padding-bottom: 5rem !important; max-width: 70rem; }
-        .stButton button { text-align: left; }
-        .stTabs [data-baseweb="tab-list"] { gap: 24px; }
-        .stTabs [data-baseweb="tab"] { height: 50px; white-space: pre-wrap; background-color: transparent; border-radius: 0px; border-bottom: 2px solid transparent; padding-top: 10px; padding-bottom: 10px; }
-        .stTabs [aria-selected="true"] { color: #1d4ed8 !important; border-bottom: 2px solid #1d4ed8 !important; font-weight: bold; }
-    </style>
+        <style>
+            header {visibility: hidden;}
+            .block-container { padding-top: 1rem !important; padding-bottom: 8rem !important; max-width: 90rem; }
+            .stButton button { text-align: left; }
+            .stTabs [data-baseweb="tab-list"] { gap: 24px; }
+            .stTabs [data-baseweb="tab"] { height: 50px; white-space: pre-wrap; background-color: transparent; border-radius: 0px; border-bottom: 2px solid transparent; padding-top: 10px; padding-bottom: 10px; }
+            .stTabs [aria-selected="true"] { color: #1d4ed8 !important; border-bottom: 2px solid #1d4ed8 !important; font-weight: bold; }
+            div[data-testid="stChatInput"] {
+                position: fixed !important;
+                bottom: 2rem !important;
+                left: 50% !important;
+                transform: translateX(-50%) !important;
+                width: calc(100% - 2rem) !important;
+                max-width: 75rem !important; /* 위쪽 채팅 컨텐츠 너비와 동일하게 맞춤 */
+                z-index: 999 !important;
+            }
+        </style>
     """,
         unsafe_allow_html=True,
     )
 
     # 기존의 render_sidebar() 호출부 삭제 완료
 
-    st.markdown("### **The Precision Curator**")
+    st.markdown("### **The Finance Curator**")
 
     # 상단 탭 구성
-    tab1, tab2 = st.tabs(["💬 Portfolio (채팅)", "🧠 Insights (나의 소비패턴)"])
+    tab1, tab2 = st.tabs(["💬 Chat (카드 추천)", "🧠 Insights (나의 소비패턴)"])
 
     # [TAB 1] 챗봇
     with tab1:
