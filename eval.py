@@ -49,7 +49,7 @@ print(f"Retriever 초기화 완료 ({len(_all_docs)}개 문서 로드됨)")
 BASE_MODEL = "gpt-3.5-turbo-16k"  # app.py 모델과 일치
 COMPARISON_MODEL = "gpt-4o-mini"
 JUDGE_MODEL = "gpt-5-mini"
-NUM_RUNS = 3  # 테스트 속도를 위해 조정 (필요시 늘리세요)
+NUM_RUNS = 10  # 테스트 속도를 위해 조정 (필요시 늘리세요)
 OUTPUT_DIR = "eval_results"
 
 TEST_CASES = [
