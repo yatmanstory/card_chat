@@ -3,6 +3,7 @@
 # ==========================================
 import json
 import os
+import time
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_openai import OpenAIEmbeddings
@@ -146,11 +147,40 @@ my_embedding = OpenAIEmbeddings(model="text-embedding-3-small", api_key=MY_API_K
 # 벡터 DB 생성 및 로컬 저장
 my_directory = "./VectorStores_Card"
 
+# 배치 단위로 분할하여 TPM 한도 초과 방지
+BATCH_SIZE = 50  # 한 번에 처리할 청크 수
+MAX_RETRIES = 5
+
+def add_documents_with_retry(vectordb, docs):
+    for attempt in range(MAX_RETRIES):
+        try:
+            vectordb.add_documents(docs)
+            return
+        except Exception as e:
+            if "rate_limit_exceeded" in str(e) or "429" in str(e):
+                wait_sec = 20 * (attempt + 1)
+                print(f"  Rate limit 초과. {wait_sec}초 대기 후 재시도 ({attempt + 1}/{MAX_RETRIES})...")
+                time.sleep(wait_sec)
+            else:
+                raise
+
+# 첫 번째 배치로 DB 초기화
+first_batch = my_chunks[:BATCH_SIZE]
 vectordb = Chroma.from_documents(
-    documents=my_chunks,
+    documents=first_batch,
     embedding=my_embedding,
     persist_directory=my_directory,
     collection_metadata={"hnsw:space": "cosine"},
 )
+print(f"배치 1/{(len(my_chunks) - 1) // BATCH_SIZE + 1} 완료")
+
+# 나머지 배치 추가
+for i in range(BATCH_SIZE, len(my_chunks), BATCH_SIZE):
+    batch = my_chunks[i:i + BATCH_SIZE]
+    batch_num = i // BATCH_SIZE + 1
+    total_batches = (len(my_chunks) - 1) // BATCH_SIZE + 1
+    print(f"배치 {batch_num}/{total_batches} 처리 중...")
+    add_documents_with_retry(vectordb, batch)
+    time.sleep(1)  # 배치 간 짧은 대기
 
 print(f"성공. '{my_directory}' 폴더에 카드 데이터 벡터 DB가 생성되었습니다.")
