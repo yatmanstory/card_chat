@@ -6,6 +6,8 @@ from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_chroma import Chroma
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_community.chat_message_histories import ChatMessageHistory
+from langchain_cohere import CohereRerank
+from langchain_classic.retrievers import ContextualCompressionRetriever
 from streamlit_agraph import agraph, Node, Edge, Config
 
 # Vecotor DB 청킹, 임베딩, 생성 관련은 vector_db.py 파일로 따로 관리
@@ -16,6 +18,7 @@ from streamlit_agraph import agraph, Node, Edge, Config
 # ==========================================
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+COHERE_API_KEY = os.getenv("COHERE_API_KEY")
 # 수파베이스 관련 키, URL 모두 삭제
 # 수파베이스 DB 대신하여 크로마DB로 생성한 벡터DB 경로 참조
 VECTOR_STORE_DIR = "./VectorStores_Card"
@@ -24,6 +27,13 @@ VECTOR_STORE_DIR = "./VectorStores_Card"
 embedding = OpenAIEmbeddings(model="text-embedding-3-small", api_key=OPENAI_API_KEY)
 vectordb = Chroma(persist_directory=VECTOR_STORE_DIR, embedding_function=embedding)
 chat_model = ChatOpenAI(model="gpt-3.5-turbo", temperature=0.3, api_key=OPENAI_API_KEY)
+
+# Cohere 리랭킹 리트리버 설정: k=15로 넓게 검색 후 Cohere가 top 3 재정렬
+base_retriever = vectordb.as_retriever(search_kwargs={"k": 15})
+my_rerank = CohereRerank(cohere_api_key=COHERE_API_KEY, model="rerank-v3.5", top_n=3)
+cohere_retriever = ContextualCompressionRetriever(
+    base_compressor=my_rerank, base_retriever=base_retriever
+)
 
 
 # ==========================================
@@ -83,7 +93,12 @@ def extract_consumption_pattern(user_text):
     chain = extract_prompt | chat_model
     response = chain.invoke({"question": user_text})
     clean_json = response.content.replace("```json", "").replace("```", "").strip()
-    return json.loads(clean_json)["categories"]
+    if not clean_json:
+        return []
+    try:
+        return json.loads(clean_json)["categories"]
+    except (json.JSONDecodeError, KeyError):
+        return []
 
     # # [Mock Data: UI 테스트용]
     # return [
@@ -149,9 +164,9 @@ def _docs_to_cards(docs):
 # k=top_k*2 로 여유있게 검색 후 슬라이싱하는 이유:
 #   청킹으로 같은 카드가 중복 등장할 수 있어 중복 제거 후 top_k가 모자랄 수 있기 때문
 def search_similar_cards(query, top_k=3):
-    """ChromaDB 기반 유사 카드 검색"""
+    """Cohere 리랭킹 기반 유사 카드 검색 (k=15 검색 → top_n=3 재정렬)"""
     try:
-        docs = vectordb.similarity_search(query, k=top_k * 2)
+        docs = cohere_retriever.invoke(query)
         return _docs_to_cards(docs)[:top_k]
 
     except Exception as e:
@@ -198,9 +213,20 @@ def generate_chat_response(user_text, cards):
         role = "사용자" if msg.type == "human" else "AI"
         formatted_history += f"{role}: {msg.content}\n"
 
-    prompt = f"""당신은 신용카드 추천 전문가입니다.
-아래 [추천 카드 목록]은 사용자에게 이미 화면에 보여주는 카드들입니다.
-반드시 이 카드들을 기준으로, 각 카드가 왜 사용자의 소비 패턴에 적합한지 간결하게 설명하세요.
+    prompt = f"""당신은 카드 추천 전문가입니다.
+제공된 [추천 카드 목록]을 바탕으로 아래 [사고 과정]에 따라 논리적으로 분석하여 답변하세요.
+
+[사고 과정(Chain-of-Thought)]
+1. 사용자의 주요 소비 패턴(영화, 카페, 쇼핑 등)과 요구사항을 파악한다.
+2. 카드 데이터 중 해당 요구사항에 가장 부합하는 혜택을 가진 카드를 분석한다.
+3. 선정한 카드들이 사용자에게 실질적으로 어떤 이득을 주는지 논리적 근거를 도출한다.
+4. 최종적으로 서로 다른 카드 TOP 3를 선정하여 결과를 출력한다.
+
+[답변 규칙]
+- 반드시 서로 다른 카드 TOP 3를 순서대로 추천할 것.
+- 문서에 없는 내용은 절대 지어내지 말 것.
+- 텍스트 출력 시 "카드사"는 제외합니다.
+- 답변은 아래 [출력 형식]을 엄격히 따를 것.
 
 [과거 대화 기록]
 {formatted_history}
@@ -211,10 +237,7 @@ def generate_chat_response(user_text, cards):
 [사용자 질문]
 {user_text}
 
-각 카드별로 주요 혜택 1가지를 언급하며 세부 사항을 섞어 추천 이유를 설명해 주세요.
-텍스트 출력 시 "카드사"는 제외합니다. 형식의 줄바꿈을 엄격하게 지키세요.
-
--- 텍스트 출력 형식-- 
+-- 출력 형식 --
 #### **카드 이름 1**\n
 **주요 혜택명** : 세부 사항 요약\n
 - 추천 이유 설명 문장

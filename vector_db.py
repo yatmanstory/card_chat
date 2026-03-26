@@ -147,9 +147,10 @@ my_embedding = OpenAIEmbeddings(model="text-embedding-3-small", api_key=MY_API_K
 # 벡터 DB 생성 및 로컬 저장
 my_directory = "./VectorStores_Card"
 
-# 배치 단위로 분할하여 TPM 한도 초과 방지
-BATCH_SIZE = 50  # 한 번에 처리할 청크 수
+# 배치 단위로 분할하여 TPM 한도 초과 및 ChromaDB 쓰기 잠금 방지
+BATCH_SIZE = 30  # 청크 수 축소로 SQLite 잠금 오류 방지
 MAX_RETRIES = 5
+
 
 def add_documents_with_retry(vectordb, docs):
     for attempt in range(MAX_RETRIES):
@@ -157,12 +158,22 @@ def add_documents_with_retry(vectordb, docs):
             vectordb.add_documents(docs)
             return
         except Exception as e:
-            if "rate_limit_exceeded" in str(e) or "429" in str(e):
+            err_str = str(e)
+            if "rate_limit_exceeded" in err_str or "429" in err_str:
                 wait_sec = 20 * (attempt + 1)
-                print(f"  Rate limit 초과. {wait_sec}초 대기 후 재시도 ({attempt + 1}/{MAX_RETRIES})...")
+                print(
+                    f"  Rate limit 초과. {wait_sec}초 대기 후 재시도 ({attempt + 1}/{MAX_RETRIES})..."
+                )
+                time.sleep(wait_sec)
+            elif "readonly" in err_str or "1032" in err_str:
+                wait_sec = 5 * (attempt + 1)
+                print(
+                    f"  DB 잠금 오류. {wait_sec}초 대기 후 재시도 ({attempt + 1}/{MAX_RETRIES})..."
+                )
                 time.sleep(wait_sec)
             else:
                 raise
+
 
 # 첫 번째 배치로 DB 초기화
 first_batch = my_chunks[:BATCH_SIZE]
@@ -176,11 +187,11 @@ print(f"배치 1/{(len(my_chunks) - 1) // BATCH_SIZE + 1} 완료")
 
 # 나머지 배치 추가
 for i in range(BATCH_SIZE, len(my_chunks), BATCH_SIZE):
-    batch = my_chunks[i:i + BATCH_SIZE]
+    batch = my_chunks[i : i + BATCH_SIZE]
     batch_num = i // BATCH_SIZE + 1
     total_batches = (len(my_chunks) - 1) // BATCH_SIZE + 1
     print(f"배치 {batch_num}/{total_batches} 처리 중...")
     add_documents_with_retry(vectordb, batch)
-    time.sleep(1)  # 배치 간 짧은 대기
+    time.sleep(2)  # SQLite flush 대기 시간 증가
 
 print(f"성공. '{my_directory}' 폴더에 카드 데이터 벡터 DB가 생성되었습니다.")

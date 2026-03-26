@@ -6,3 +6,4 @@ __pycache__/
 
 # ChromaDB 벡터 스토어 (자동 생성, 대용량)
 VectorStores_Card/
+고도화.py
