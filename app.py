@@ -31,7 +31,9 @@ VECTOR_STORE_DIR = "./VectorStores_Card"
 # 크로마DB에서 선언한 Embedding과 Vectordb로 변경
 embedding = OpenAIEmbeddings(model="text-embedding-3-small", api_key=OPENAI_API_KEY)
 vectordb = Chroma(persist_directory=VECTOR_STORE_DIR, embedding_function=embedding)
-chat_model = ChatOpenAI(model="gpt-3.5-turbo", temperature=0, api_key=OPENAI_API_KEY)
+chat_model = ChatOpenAI(
+    model="gpt-3.5-turbo-16k", temperature=0, api_key=OPENAI_API_KEY
+)
 
 # ── BM25 (키워드 기반) 리트리버 ──────────────────────────────────────────
 # ChromaDB에서 전체 문서를 로드해 BM25 인덱스 생성
@@ -531,25 +533,17 @@ def main():
 
             with st.chat_message("assistant"):
                 with st.spinner("맞춤형 금융 상품을 탐색 중입니다..."):
-                    # [STEP 1] 소비 패턴 추출
+                    # [STEP 1] 소비 패턴 추출 (마인드맵 렌더링 전용 — 검색에 사용 안 함)
                     categories = extract_consumption_pattern(prompt)
                     st.session_state.analysis_result = categories
 
-                    # [STEP 2] 검색 쿼리 재구성 (노이즈 제거)
-                    if categories:
-                        search_query = (
-                            " ".join([c["label"] for c in categories])
-                            + " 할인 혜택 카드"
-                        )
-                    else:
-                        search_query = prompt
+                    # [STEP 2] 원본 질의로 직접 검색 (Hybrid BM25+Chroma → Cohere Rerank)
+                    # 카테고리 키워드로 쿼리를 재구성하면 사용자 원래 의도가 왜곡됨
+                    # 원본 질의의 맥락("교육비 800만원", "식비 200만원")을 그대로 임베딩에 활용
+                    # "삼성 다니는" 같은 노이즈는 BM25+앙상블+Cohere 재정렬이 희석
+                    recommended_cards, retrieved_docs = search_similar_cards(prompt, 3)
 
-                    # [STEP 3] Hybrid(BM25+Chroma) → Cohere Rerank
-                    recommended_cards, retrieved_docs = search_similar_cards(
-                        search_query, 3
-                    )
-
-                    # [STEP 4] LLM 응답 생성 (page_content 기반 풍부한 context)
+                    # [STEP 3] LLM 응답 생성 (page_content 기반 풍부한 context)
                     bot_reply, llm_prompt = generate_chat_response(
                         prompt, retrieved_docs
                     )
@@ -561,8 +555,8 @@ def main():
                     with st.expander("🔍 디버그 로그"):
                         st.markdown("**① 추출된 소비 패턴 카테고리**")
                         st.json(categories)
-                        st.markdown("**② 벡터 검색 쿼리**")
-                        st.code(search_query, language="text")
+                        st.markdown("**② 벡터 검색 쿼리 (원본 질의 그대로 사용)**")
+                        st.code(prompt, language="text")
                         st.markdown("**③ 검색된 카드**")
                         st.write([c["card_name"] for c in recommended_cards])
                         st.markdown(
