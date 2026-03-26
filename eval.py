@@ -209,6 +209,7 @@ def get_base_recommendation(client, user_pattern):
                 {"role": "user", "content": user_pattern},
             ],
             temperature=0,
+            response_format={"type": "json_object"},
         )
         content = resp.choices[0].message.content
         return json.loads(re.sub(r"```json|```", "", content).strip())
