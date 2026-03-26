@@ -468,12 +468,12 @@ def render_mindmap_tab():
                     bg_style = (
                         f"background-image: url('{card.get('image_url')}'); background-size: cover; background-position: center;"
                         if card.get("image_url")
-                        else f"background: {card.get('gradient', '#ccc')};"
+                        else f"background: '#ccc');"
                     )
 
                     st.markdown(
                         f"""
-                        <div style="{bg_style} height: 200px; border-radius: 12px; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.1);"></div>
+                        <div style="{bg_style} height: 240px; border-radius: 12px; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.1);"></div>
                     """,
                         unsafe_allow_html=True,
                     )
@@ -493,8 +493,38 @@ def render_mindmap_tab():
                         st.rerun()
 
                 st.write("---")
+
                 for b in card.get("benefits", [])[:-1]:
-                    st.info(f"#### {b['benefit_name']}")
+                    st.markdown(
+                        f"""
+                        <div style="
+                            background: linear-gradient(135deg, #eef2ff, #e0e7ff);
+                            border-radius: 12px;
+                            padding: 16px 18px;
+                            margin-bottom: 12px;
+                            box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+                        ">
+                            <div style="
+                                font-size: 0.85rem;
+                                font-weight: 700;
+                                color: #4338ca;
+                                margin-bottom: 6px;
+                                letter-spacing: -0.3px;
+                            ">
+                                ✦ {b['benefit_name']}
+                            </div>
+                            <div style="
+                                font-size: 0.9rem;
+                                color: #374151;
+                                line-height: 1.5;
+                                font-weight: 500;
+                            ">
+                                {b.get('summary', '')}
+                            </div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
         else:
             st.info("왼쪽 마인드맵에서 원하시는 카테고리를 클릭해보세요!")
 
