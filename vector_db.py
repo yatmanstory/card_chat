@@ -18,7 +18,7 @@ json_files = ["data/cards.json"]
 
 # Recursive Splitter 객체 생성
 splitter = RecursiveCharacterTextSplitter(
-    chunk_size=1000, chunk_overlap=50, separators=["\n\n", "\n", " "]
+    chunk_size=2000, chunk_overlap=50, separators=["\n\n", "\n", " "]
 )
 
 my_chunks = []
