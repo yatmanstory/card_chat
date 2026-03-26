@@ -65,7 +65,7 @@ def init_session_state():
         st.session_state.messages = [
             {
                 "role": "assistant",
-                "content": "안녕하세요! Financial Concierge입니다. 고객님의 소비 패턴(예: 배달, 교통, 쇼핑 등)이나 궁금한 점을 편하게 말씀해 주시면, 최적의 카드를 추천해 드립니다.",
+                "content": "안녕하세요! Card Concierge입니다. 고객님의 소비 패턴(예: 배달, 교통, 쇼핑 등)이나 궁금한 점을 편하게 말씀해 주시면, 최적의 카드를 추천해 드립니다.",
                 "cards": [],
             }
         ]
@@ -390,7 +390,7 @@ def render_mindmap_tab():
     """Insights (나의 소비패턴) 탭 렌더링"""
     if not st.session_state.analysis_result:
         st.info(
-            "아직 분석된 소비 패턴이 없습니다. 'Portfolio' 탭에서 챗봇과 대화를 나누어 보세요!"
+            "아직 분석된 소비 패턴이 없습니다. 'Chat (카드 추천)' 탭에서 챗봇과 대화를 나누어 보세요!"
         )
         return
 
@@ -468,12 +468,12 @@ def render_mindmap_tab():
                     bg_style = (
                         f"background-image: url('{card.get('image_url')}'); background-size: cover; background-position: center;"
                         if card.get("image_url")
-                        else f"background: {card.get('gradient', '#ccc')};"
+                        else f"background: '#ccc');"
                     )
 
                     st.markdown(
                         f"""
-                        <div style="{bg_style} height: 200px; border-radius: 12px; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.1);"></div>
+                        <div style="{bg_style} height: 240px; border-radius: 12px; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.1);"></div>
                     """,
                         unsafe_allow_html=True,
                     )
@@ -493,8 +493,38 @@ def render_mindmap_tab():
                         st.rerun()
 
                 st.write("---")
+
                 for b in card.get("benefits", [])[:-1]:
-                    st.info(f"#### {b['benefit_name']}")
+                    st.markdown(
+                        f"""
+                        <div style="
+                            background: linear-gradient(135deg, #eef2ff, #e0e7ff);
+                            border-radius: 12px;
+                            padding: 16px 18px;
+                            margin-bottom: 12px;
+                            box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+                        ">
+                            <div style="
+                                font-size: 0.85rem;
+                                font-weight: 700;
+                                color: #4338ca;
+                                margin-bottom: 6px;
+                                letter-spacing: -0.3px;
+                            ">
+                                ✦ {b['benefit_name']}
+                            </div>
+                            <div style="
+                                font-size: 0.9rem;
+                                color: #374151;
+                                line-height: 1.5;
+                                font-weight: 500;
+                            ">
+                                {b.get('summary', '')}
+                            </div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
         else:
             st.info("왼쪽 마인드맵에서 원하시는 카테고리를 클릭해보세요!")
 
@@ -533,10 +563,10 @@ def main():
 
     # 기존의 render_sidebar() 호출부 삭제 완료
 
-    st.markdown("### **The Precision Curator**")
+    st.markdown("### **The Finance Curator**")
 
     # 상단 탭 구성
-    tab1, tab2 = st.tabs(["💬 Portfolio (채팅)", "🧠 Insights (나의 소비패턴)"])
+    tab1, tab2 = st.tabs(["💬 Chat (카드 추천)", "🧠 Insights (나의 소비패턴)"])
 
     # [TAB 1] 챗봇
     with tab1:
