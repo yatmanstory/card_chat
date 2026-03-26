@@ -28,9 +28,11 @@ embedding = OpenAIEmbeddings(model="text-embedding-3-small", api_key=OPENAI_API_
 vectordb = Chroma(persist_directory=VECTOR_STORE_DIR, embedding_function=embedding)
 chat_model = ChatOpenAI(model="gpt-3.5-turbo", temperature=0.3, api_key=OPENAI_API_KEY)
 
-# Cohere 리랭킹 리트리버 설정: k=15로 넓게 검색 후 Cohere가 top 3 재정렬
+# Cohere 리랭킹 리트리버 설정: k=15로 넓게 검색 후 Cohere가 top 6 재정렬
+# top_n=6인 이유: 청킹으로 같은 카드가 여러 chunk로 등장할 수 있어,
+# 중복 제거 후 3개가 확보되려면 여유분이 필요함
 base_retriever = vectordb.as_retriever(search_kwargs={"k": 15})
-my_rerank = CohereRerank(cohere_api_key=COHERE_API_KEY, model="rerank-v3.5", top_n=3)
+my_rerank = CohereRerank(cohere_api_key=COHERE_API_KEY, model="rerank-v3.5", top_n=6)
 cohere_retriever = ContextualCompressionRetriever(
     base_compressor=my_rerank, base_retriever=base_retriever
 )
