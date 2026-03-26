@@ -137,7 +137,7 @@ def format_fee(fee):
     try:
         return f"{int(fee):,}원"
     except:
-        return fee  # 이미 문자열이면 그대로
+        return fee + "원"  # 이미 문자열이면 그대로
 
 
 # [신규 추가 함수]
@@ -411,7 +411,12 @@ def render_mindmap_tab():
             )
             edges.append(Edge(source="root", target=cat["id"]))
 
-        config = Config(width="100%", height=450, directed=False, physics=True)
+        config = Config(
+            width="100%",
+            height=550,
+            directed=False,
+            physics={"enabled": True, "stabilization": {"iterations": 200}},
+        )
         clicked_id = agraph(nodes=nodes, edges=edges, config=config)
 
     with col2:
@@ -507,7 +512,7 @@ def main():
         """
         <style>
             header {visibility: hidden;}
-            .block-container { padding-top: 1rem !important; padding-bottom: 8rem !important; max-width: 70rem; }
+            .block-container { padding-top: 1rem !important; padding-bottom: 8rem !important; max-width: 90rem; }
             .stButton button { text-align: left; }
             .stTabs [data-baseweb="tab-list"] { gap: 24px; }
             .stTabs [data-baseweb="tab"] { height: 50px; white-space: pre-wrap; background-color: transparent; border-radius: 0px; border-bottom: 2px solid transparent; padding-top: 10px; padding-bottom: 10px; }
@@ -518,7 +523,7 @@ def main():
                 left: 50% !important;
                 transform: translateX(-50%) !important;
                 width: calc(100% - 2rem) !important;
-                max-width: 66rem !important; /* 위쪽 채팅 컨텐츠 너비와 동일하게 맞춤 */
+                max-width: 75rem !important; /* 위쪽 채팅 컨텐츠 너비와 동일하게 맞춤 */
                 z-index: 999 !important;
             }
         </style>
