@@ -7,7 +7,12 @@ from langchain_chroma import Chroma
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_community.chat_message_histories import ChatMessageHistory
 from langchain_cohere import CohereRerank
-from langchain_classic.retrievers import ContextualCompressionRetriever
+from langchain_classic.retrievers import (
+    ContextualCompressionRetriever,
+    EnsembleRetriever,
+)
+from langchain_community.retrievers import BM25Retriever
+from langchain_core.documents import Document
 from streamlit_agraph import agraph, Node, Edge, Config
 
 # Vecotor DB 청킹, 임베딩, 생성 관련은 vector_db.py 파일로 따로 관리
@@ -26,15 +31,29 @@ VECTOR_STORE_DIR = "./VectorStores_Card"
 # 크로마DB에서 선언한 Embedding과 Vectordb로 변경
 embedding = OpenAIEmbeddings(model="text-embedding-3-small", api_key=OPENAI_API_KEY)
 vectordb = Chroma(persist_directory=VECTOR_STORE_DIR, embedding_function=embedding)
-chat_model = ChatOpenAI(model="gpt-3.5-turbo", temperature=0.3, api_key=OPENAI_API_KEY)
+chat_model = ChatOpenAI(model="gpt-3.5-turbo", temperature=0, api_key=OPENAI_API_KEY)
 
-# Cohere 리랭킹 리트리버 설정: k=15로 넓게 검색 후 Cohere가 top 6 재정렬
-# top_n=6인 이유: 청킹으로 같은 카드가 여러 chunk로 등장할 수 있어,
-# 중복 제거 후 3개가 확보되려면 여유분이 필요함
+# ── BM25 (키워드 기반) 리트리버 ──────────────────────────────────────────
+# ChromaDB에서 전체 문서를 로드해 BM25 인덱스 생성
+# BM25는 "교육비", "식비" 같은 정확한 키워드 매칭에 강점
+_raw = vectordb.get()
+_all_docs = [
+    Document(page_content=text, metadata=meta)
+    for text, meta in zip(_raw["documents"], _raw["metadatas"])
+]
+bm25_retriever = BM25Retriever.from_documents(_all_docs, k=15)
+
+# ── Hybrid Retriever: BM25(0.4) + Chroma Dense(0.6) ─────────────────────
+# BM25: 키워드 매칭에 강함 / Chroma: 의미적 유사도에 강함
+# 두 결과를 앙상블해 상호 보완 → Cohere가 최종 top 6 재정렬
 base_retriever = vectordb.as_retriever(search_kwargs={"k": 15})
+ensemble_retriever = EnsembleRetriever(
+    retrievers=[bm25_retriever, base_retriever],
+    weights=[0.4, 0.6],
+)
 my_rerank = CohereRerank(cohere_api_key=COHERE_API_KEY, model="rerank-v3.5", top_n=6)
 cohere_retriever = ContextualCompressionRetriever(
-    base_compressor=my_rerank, base_retriever=base_retriever
+    base_compressor=my_rerank, base_retriever=ensemble_retriever
 )
 
 
@@ -166,14 +185,22 @@ def _docs_to_cards(docs):
 # k=top_k*2 로 여유있게 검색 후 슬라이싱하는 이유:
 #   청킹으로 같은 카드가 중복 등장할 수 있어 중복 제거 후 top_k가 모자랄 수 있기 때문
 def search_similar_cards(query, top_k=3):
-    """Cohere 리랭킹 기반 유사 카드 검색 (k=15 검색 → top_n=3 재정렬)"""
+    """Hybrid(BM25+Chroma) → Cohere 리랭킹 기반 유사 카드 검색
+    반환: (cards, docs)
+      - cards: UI 렌더링용 dict 리스트 (metadata 기반)
+      - docs:  LLM context용 Document 리스트 (page_content 포함)
+    """
     try:
         docs = cohere_retriever.invoke(query)
-        return _docs_to_cards(docs)[:top_k]
+        cards = _docs_to_cards(docs)[:top_k]
+        # UI에 표시될 카드 이름 기준으로 관련 doc만 필터링
+        card_names = {c["card_name"] for c in cards}
+        filtered_docs = [d for d in docs if d.metadata.get("card_name") in card_names]
+        return cards, filtered_docs
 
     except Exception as e:
         st.error(f"카드 검색 중 오류: {e}")
-        return []
+        return [], []
 
 
 # [기존 함수 교체]
@@ -198,17 +225,18 @@ def search_similar_cards_by_category(category, top_k=3):
 #   → LLM이 참조하는 카드와 하단에 렌더링되는 카드가 달라지는 문제 발생
 # 변경: main()에서 search_similar_cards()로 먼저 검색한 뒤 결과를 이 함수에 전달
 #   → LLM context와 렌더링 카드가 동일한 데이터를 바라보도록 보장
-def generate_chat_response(user_text, cards):
-    """RAG 기반 챗봇 응답 생성 (렌더링 카드와 동일한 context 사용)"""
-    # 렌더링될 카드의 이름과 혜택 요약으로 context 구성
-    context = "\n\n".join(
-        [
-            f"카드명: {c['card_name']} ({c['card_company']})\n"
-            f"연회비: {c['fee']}원 / 전월실적: {c['condition']}\n"
-            f"주요혜택: {' | '.join([b.get('benefit_name', '') + ': ' + b.get('summary', '') for b in c.get('benefits', [])])}"
-            for c in cards
-        ]
-    )
+def generate_chat_response(user_text, docs):
+    """RAG 기반 챗봇 응답 생성
+    - docs: page_content 기반 풍부한 context (혜택 상세 조건 포함)
+    """
+    # docs의 page_content를 카드별로 그룹핑해 전체 혜택 상세까지 LLM에 전달
+    # 기존 방식(metadata 요약 5개)보다 훨씬 풍부한 정보 제공
+    card_contents: dict[str, list[str]] = {}
+    for doc in docs:
+        name = doc.metadata.get("card_name", "")
+        card_contents.setdefault(name, []).append(doc.page_content)
+
+    context = "\n\n---\n\n".join("\n".join(chunks) for chunks in card_contents.values())
 
     formatted_history = ""
     for msg in st.session_state.chat_history.messages:
@@ -259,7 +287,7 @@ def generate_chat_response(user_text, cards):
     st.session_state.chat_history.add_user_message(user_text)
     st.session_state.chat_history.add_ai_message(reply)
 
-    return reply
+    return reply, prompt
 
 
 # ==========================================
@@ -503,14 +531,49 @@ def main():
 
             with st.chat_message("assistant"):
                 with st.spinner("맞춤형 금융 상품을 탐색 중입니다..."):
+                    # [STEP 1] 소비 패턴 추출
                     categories = extract_consumption_pattern(prompt)
                     st.session_state.analysis_result = categories
-                    # 카드 먼저 검색 → 동일한 결과를 LLM context와 렌더링에 공유
-                    recommended_cards = search_similar_cards(prompt, 3)
-                    bot_reply = generate_chat_response(prompt, recommended_cards)
+
+                    # [STEP 2] 검색 쿼리 재구성 (노이즈 제거)
+                    if categories:
+                        search_query = (
+                            " ".join([c["label"] for c in categories])
+                            + " 할인 혜택 카드"
+                        )
+                    else:
+                        search_query = prompt
+
+                    # [STEP 3] Hybrid(BM25+Chroma) → Cohere Rerank
+                    recommended_cards, retrieved_docs = search_similar_cards(
+                        search_query, 3
+                    )
+
+                    # [STEP 4] LLM 응답 생성 (page_content 기반 풍부한 context)
+                    bot_reply, llm_prompt = generate_chat_response(
+                        prompt, retrieved_docs
+                    )
 
                     st.markdown(bot_reply)
                     render_3_column_cards(recommended_cards)
+
+                    # 디버그 로그 (접기 가능)
+                    with st.expander("🔍 디버그 로그"):
+                        st.markdown("**① 추출된 소비 패턴 카테고리**")
+                        st.json(categories)
+                        st.markdown("**② 벡터 검색 쿼리**")
+                        st.code(search_query, language="text")
+                        st.markdown("**③ 검색된 카드**")
+                        st.write([c["card_name"] for c in recommended_cards])
+                        st.markdown(
+                            f"**④ LLM context 문서 수: {len(retrieved_docs)}개 chunks**"
+                        )
+                        for doc in retrieved_docs:
+                            st.caption(
+                                f"📄 {doc.metadata.get('card_name')} — {len(doc.page_content)}자"
+                            )
+                        st.markdown("**⑤ LLM에 전달된 전체 프롬프트**")
+                        st.code(llm_prompt, language="text")
 
                     st.session_state.messages.append(
                         {
