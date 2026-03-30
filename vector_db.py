@@ -77,8 +77,9 @@ for file_name in json_files:
                 card_group = "general"
 
             # 혜택 키워드 추출 (benefits_name 고유값)
+            # ChromaDB 1.5+에서 $contains는 list 타입에서만 동작 → list로 저장
             benefit_keywords = extract_benefit_keywords(benefits_structured)
-            benefit_keywords_str = ", ".join(benefit_keywords)
+            benefit_keywords_str = ", ".join(benefit_keywords)  # page_content 텍스트용
 
             # annual_fee 처리 (domestic/overseas 구조 대응)
             annual_fee = card.get("annual_fee", {})
@@ -122,7 +123,7 @@ for file_name in json_files:
                     "card_name": card["card_name"],
                     "card_company": card["card_company"],
                     "card_group": card_group,
-                    "benefit_keywords": benefit_keywords_str,
+                    "benefit_keywords": benefit_keywords,  # list 타입 → $contains 필터 작동
                     # UI 렌더링에 필요한 추가 메타데이터
                     "image_url": card.get("image_url", ""),
                     "detail_url": card.get("detail_url", ""),

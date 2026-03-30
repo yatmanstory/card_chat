@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import streamlit as st
 from dotenv import load_dotenv
@@ -91,23 +92,29 @@ def init_session_state():
 # ==========================================
 def extract_consumption_pattern(user_text):
     """
-    사용자 대화에서 소비 패턴을 추출하여 JSON 형태로 반환 (마인드맵 용도)
+    사용자 대화에서 소비 패턴을 추출하여 JSON 형태로 반환
+    반환: {"categories": [{id, label, percent}], "search_profile": "상세 검색 프로필"}
     """
-    # [실제 적용 시 주석 해제]
     extract_prompt = ChatPromptTemplate.from_messages(
         [
             (
                 "system",
                 """사용자의 소비 패턴을 분석하여 JSON 형식으로 응답하세요.
-                반드시 'categories'라는 키에 [id, label, percent]를 포함한 리스트를 담아야 합니다.
+반드시 'categories'와 'search_profile' 두 가지 키를 포함해야 합니다.
 
-                예:
-                {{"categories": [
-                    {{"id": "food", "label": "식비", "percent": 40}},
-                    {{"id": "transport", "label": "교통", "percent": 20}},
-                    {{"id": "shopping", "label": "온라인쇼핑", "percent": 20}},
-                ]}}
-                """,
+1. 'categories': 지출 비중이 높은 핵심 분야 최대 4개를 [id, label, percent] 리스트로 담으세요.
+   - percent 합계는 반드시 100이어야 합니다.
+2. 'search_profile': 사용자의 상황과 필요한 혜택을 모든 키워드를 포함해 상세한 문장으로 재작성하세요.
+
+응답 예시:
+{{
+    "categories": [
+        {{"id": "food", "label": "배달앱", "percent": 40}},
+        {{"id": "transport", "label": "대중교통", "percent": 30}}
+    ],
+    "search_profile": "20대 대학생으로 배달음식과 카페 이용 비중이 높으며 교통비와 OTT 구독 할인이 필요한 상황"
+}}
+""",
             ),
             ("human", "{question}"),
         ]
@@ -117,18 +124,16 @@ def extract_consumption_pattern(user_text):
     response = chain.invoke({"question": user_text})
     clean_json = response.content.replace("```json", "").replace("```", "").strip()
     if not clean_json:
-        return []
+        return {"categories": [], "search_profile": user_text}
     try:
-        return json.loads(clean_json)["categories"]
+        data = json.loads(clean_json)
+        if "categories" in data:
+            data["categories"] = sorted(
+                data["categories"], key=lambda x: x.get("percent", 0), reverse=True
+            )[:3]
+        return data
     except (json.JSONDecodeError, KeyError):
-        return []
-
-    # # [Mock Data: UI 테스트용]
-    # return [
-    #     {"id": "food", "label": "배달/외식", "percent": 50},
-    #     {"id": "transport", "label": "대중교통", "percent": 30},
-    #     {"id": "shopping", "label": "온라인쇼핑", "percent": 20},
-    # ]
+        return {"categories": [], "search_profile": user_text}
 
 
 def format_fee(fee):
@@ -142,12 +147,20 @@ def format_fee(fee):
         return fee + "원"  # 이미 문자열이면 그대로
 
 
-# [신규 추가 함수]
-# 기존에는 Supabase RPC가 UI에 필요한 모든 필드를 직접 반환했음.
-# ChromaDB는 Document 객체를 반환하므로, metadata에서 필드를 꺼내
-# render_3_column_cards()가 기대하는 dict 형태로 재조립하는 변환 레이어가 필요해짐.
-# → 두 검색 함수(search_similar_cards, search_similar_cards_by_category)가
-#   공통으로 사용하도록 별도 함수로 분리함.
+def _filter_docs_to_top_cards(docs, top_k=3):
+    """rerank 결과에서 상위 top_k 카드 card_id만 추출 후 해당 카드의 청크만 반환"""
+    seen, card_ids = set(), []
+    for doc in docs:
+        cid = doc.metadata.get("card_id", "")
+        if cid and cid not in seen:
+            seen.add(cid)
+            card_ids.append(cid)
+        if len(card_ids) >= top_k:
+            break
+    top_ids = set(card_ids)
+    return [d for d in docs if d.metadata.get("card_id") in top_ids]
+
+
 def _docs_to_cards(docs):
     """ChromaDB Document 리스트를 UI 렌더링용 카드 dict list로 변환"""
 
@@ -192,71 +205,37 @@ def _docs_to_cards(docs):
     return cards
 
 
-# [기존 함수 교체]
-# 변경 전: get_embedding()으로 직접 임베딩 → supabase.rpc("match_cards") 호출
-# 변경 후: vectordb.similarity_search()로 ChromaDB에서 직접 유사도 검색
-#          결과를 _docs_to_cards()로 변환하여 반환
-# k=top_k*2 로 여유있게 검색 후 슬라이싱하는 이유:
-#   청킹으로 같은 카드가 중복 등장할 수 있어 중복 제거 후 top_k가 모자랄 수 있기 때문
-def search_similar_cards(query, categories=None, top_k=3):
-    """Hybrid(BM25+Chroma) → Cohere 리랭킹 기반 유사 카드 검색
+def search_similar_cards(query, analysis=None, top_k=3):
+    """BM25 + Chroma Hybrid → Cohere 리랭킹 기반 유사 카드 검색
 
-    categories: extract_consumption_pattern() 결과를 재활용 (마인드맵과 공유)
-      → 추출된 카테고리 label을 benefit_keywords 메타데이터 필터로 사용
-      → 해당 혜택이 있는 카드만 Chroma 검색 대상으로 한정 → 정확도 향상
-      → 필터 적용 후 top_k 미만이면 필터 없는 전체 검색으로 폴백
+    analysis: extract_consumption_pattern() 결과 {"categories": [...], "search_profile": "..."}
+      → 소비 비중 상위 카테고리와 search_profile로 가중 쿼리를 구성해 검색 정확도 향상
 
-    반환: (cards, docs, filter_applied)
+    반환: (cards, docs)
       - cards: UI 렌더링용 dict 리스트 (metadata 기반)
       - docs:  LLM context용 Document 리스트 (page_content 포함)
-      - filter_applied: 실제로 benefit 필터가 사용됐는지 여부 (디버그용)
     """
     try:
-        # ── benefit_keywords 필터 구성 ─────────────────────────────────────
-        # categories: [{"id": "food", "label": "카페", "percent": 30}, ...]
-        labels = [c["label"] for c in (categories or []) if c.get("label")]
-        chroma_filter = None
-        if labels:
-            if len(labels) == 1:
-                chroma_filter = {"benefit_keywords": {"$contains": labels[0]}}
-            else:
-                chroma_filter = {
-                    "$or": [{"benefit_keywords": {"$contains": lbl}} for lbl in labels]
-                }
+        if analysis is None:
+            analysis = {}
+        categories = analysis.get("categories", [])
+        search_profile = analysis.get("search_profile", query)
 
-        # ── 1차: benefit 필터 적용 검색 ───────────────────────────────────
-        filter_applied = False
-        if chroma_filter:
-            filtered_base = vectordb.as_retriever(
-                search_kwargs={"k": 15, "filter": chroma_filter}
-            )
-            filtered_ensemble = EnsembleRetriever(
-                retrievers=[bm25_retriever, filtered_base], weights=[0.4, 0.6]
-            )
-            filtered_cohere = ContextualCompressionRetriever(
-                base_compressor=my_rerank, base_retriever=filtered_ensemble
-            )
-            docs = filtered_cohere.invoke(query)
-            unique_card_count = len({d.metadata.get("card_id") for d in docs})
-
-            if unique_card_count >= top_k:
-                filter_applied = True
-            else:
-                # 필터로 충분한 카드를 못 찾으면 전체 검색으로 폴백
-                docs = cohere_retriever.invoke(query)
+        # 소비 비중 상위 2개 카테고리 + 전체 소비 프로필로 가중 쿼리 구성
+        top_names = [c["label"] for c in categories[:2] if c.get("label")]
+        if top_names:
+            weighted_query = f"[{', '.join(top_names)} 집중 할인] {search_profile}"
         else:
-            docs = cohere_retriever.invoke(query)
+            weighted_query = search_profile
 
-        # ── card_id 기준 중복 제거 후 doc 필터링 ──────────────────────────
-        # card_name이 같아도 card_id가 다르면 별개 카드 (예: 카카오페이 체크카드 - 여러 은행)
+        docs = cohere_retriever.invoke(weighted_query)
+        filtered_docs = _filter_docs_to_top_cards(docs, top_k=top_k)
         cards = _docs_to_cards(docs)[:top_k]
-        card_ids = {c["card_id"] for c in cards}
-        filtered_docs = [d for d in docs if d.metadata.get("card_id") in card_ids]
-        return cards, filtered_docs, filter_applied
+        return cards, filtered_docs
 
     except Exception as e:
         st.error(f"카드 검색 중 오류: {e}")
-        return [], [], False
+        return [], []
 
 
 # [기존 함수 교체]
@@ -281,65 +260,65 @@ def search_similar_cards_by_category(category, top_k=3):
 #   → LLM이 참조하는 카드와 하단에 렌더링되는 카드가 달라지는 문제 발생
 # 변경: main()에서 search_similar_cards()로 먼저 검색한 뒤 결과를 이 함수에 전달
 #   → LLM context와 렌더링 카드가 동일한 데이터를 바라보도록 보장
-def generate_chat_response(user_text, docs):
-    """RAG 기반 챗봇 응답 생성
-    - docs: page_content 기반 풍부한 context (혜택 상세 조건 포함)
-    """
-    # docs의 page_content를 카드별로 그룹핑해 전체 혜택 상세까지 LLM에 전달
-    # 기존 방식(metadata 요약 5개)보다 훨씬 풍부한 정보 제공
+def generate_chat_response(user_text, docs, categories):
+    """RAG 기반 챗봇 응답 생성 (eval_compare.py _build_rag_prompt 방식 적용)"""
+    pattern_summary = ", ".join([f"{c['label']}({c['percent']}%)" for c in categories])
+
     card_contents: dict[str, list[str]] = {}
     for doc in docs:
         name = doc.metadata.get("card_name", "")
-        card_contents.setdefault(name, []).append(doc.page_content)
+        cleaned = re.sub(
+            r"\[유의사항\].*?(?=\n\[|\Z)", "", doc.page_content, flags=re.DOTALL
+        ).strip()
+        if cleaned:
+            card_contents.setdefault(name, []).append(cleaned)
 
-    context = "\n\n---\n\n".join("\n".join(chunks) for chunks in card_contents.values())
+    context = "\n\n---\n\n".join(
+        f"【 카드명: {n} 】\n" + "\n\n".join(chunks)
+        for n, chunks in card_contents.items()
+    )
+    card_names = list(card_contents.keys())
+    cn1 = card_names[0] if len(card_names) > 0 else "카드 1"
+    cn2 = card_names[1] if len(card_names) > 1 else "카드 2"
+    cn3 = card_names[2] if len(card_names) > 2 else "카드 3"
 
     formatted_history = ""
     for msg in st.session_state.chat_history.messages:
         role = "사용자" if msg.type == "human" else "AI"
         formatted_history += f"{role}: {msg.content}\n"
 
-    prompt = f"""당신은 카드 추천 전문가입니다.
-제공된 [추천 카드 목록]을 바탕으로 아래 [사고 과정]에 따라 논리적으로 분석하여 답변하세요.
-
-[사고 과정(Chain-of-Thought)]
-1. 사용자의 질의를 분석하여 사용자의 주요 소비 패턴을(영화, 카페, 쇼핑 등)과 요구 사항을 정확하게 파악한다.
-2. 카드 데이터 중 해당 요구 사항에 가장 부합하는 benefit_name을 찾는다.
-3. 선정한 카드들이 사용자에게 실질적으로 어떤 이득을 주는지 논리적 근거를 정확하게 도출한다.
-4. 최종적으로 서로 다른 카드 TOP 3를 선정하여 결과를 출력한다.
-
-[답변 규칙]
-- 반드시 서로 다른 카드 **TOP 3**를 순서대로 추천할 것.
-- 문서에 없는 내용은 절대 지어내지 말 것.
-- 답변은 아래 [예시]의 형식을 엄격히 따를 것.
-
-[Few-Shot 예시]
-질문: 30대 남성 직장인으로 일본을 좋아해서 연 2회 이상 일본 해외여행을 다님, 여행 경비는 연 300만원이고, 현지의 편의점을 자주 가는 편이야 하루 1끼는 꼭 편의점으로 해결하는 것 같아. 그리고 국내 고정 치출로는 유류비 15만원이 고정 지출이야
-사고 과정: 
-1. 사용자의 연령대 파악 : 30대 남성 -> 경제 활동 인구
-2. 소비 패턴 : 연 2회 이상 일본 여행 다님 특정 국가 지목 "일본"
-3. 주 소비처 : 여행, 경비 : 300만원
-4. 부 소비처 1: 현지의 편의점 -> 일본의 편의점
-5. 부 소비처 2: 국내의 유류비 
-6. 종합 소비 패턴 : 여행, 일본, 주유
-4. 삼성카드 & MILEAGE PLATINUM (스카이패스)의 항공 마일리지 적립, 주유 마일리지 적립 > 실질적 비용 절감 효과가 큼.
-
--- 출력 형식 -- 
-: 1. 추천 카드: 삼성카드 & MILEAGE PLATINUM (스카이패스)
- 주요 혜택: 대한 항공 마일리지 적립
- 추천 사유: 모든 가맹점에서 이용금액 1,000원당 1마일리지 기본적으로 적립할 수 있어, 연 2회 이상의 여행 시 페이백 효과 큽니다.
- 주요 혜택: 대한 항공 마일리지 적립
- 추천 사유: SK에너지, GS칼텍스, 현대오일뱅크, S-OIL, 알뜰주유소 및 LPG충전소 등에서 1,000원당 2 마일리지 적립됨, 유류비가 고정 지출인만큼, 고정적으로 마일리지가 적립되어 여행 경비에도 유리합니다.
-
-[과거 대화 기록]
-{formatted_history}
+    prompt = f"""당신은 카드 추천 전문가입니다. 사용자의 주요 소비 패턴: {pattern_summary}
 
 [추천 카드 목록]
 {context}
 
+[과거 대화 기록]
+{formatted_history}
 [사용자 질문]
 {user_text}
-"""
+
+[답변 규칙]
+1. 반드시 {cn1}, {cn2}, {cn3} 세 카드를 모두 순서대로 추천하세요.
+2. 각 카드별로 사용자가 직접 언급한 소비 패턴과 가장 관련된 혜택 2가지를 선정하세요.
+3. 카드명, 혜택명1, 혜택명2, 추천 이유는 반드시 각각 새로운 줄에서 시작하세요.
+4. 추천 이유는 사용자가 언급한 구체적인 수치와 카드 혜택 조건을 연결하여 2~3문장으로 작성하세요.
+5. 문서에 없는 내용은 절대 지어내지 마세요.
+
+-- 출력 형식 --
+#### [**{cn1}**]
+**혜택명1**: 혜택 요약 1줄
+**혜택명2**: 혜택 요약 1줄
+- 추천 이유: 2~3문장
+
+#### [**{cn2}**]
+**혜택명1**: 혜택 요약 1줄
+**혜택명2**: 혜택 요약 1줄
+- 추천 이유: 2~3문장
+
+#### [**{cn3}**]
+**혜택명1**: 혜택 요약 1줄
+**혜택명2**: 혜택 요약 1줄
+- 추천 이유: 2~3문장"""
 
     response = chat_model.invoke(prompt)
     reply = response.content
@@ -634,22 +613,19 @@ def main():
 
             with st.chat_message("assistant"):
                 with st.spinner("맞춤형 금융 상품을 탐색 중입니다..."):
-                    # [STEP 1] 소비 패턴 추출
-                    # 마인드맵 렌더링 + benefit_keywords 필터 구성에 동시 활용
-                    categories = extract_consumption_pattern(prompt)
+                    # [STEP 1] 소비 패턴 추출 (categories + search_profile)
+                    analysis = extract_consumption_pattern(prompt)
+                    categories = analysis.get("categories", [])
                     st.session_state.analysis_result = categories
 
-                    # [STEP 2] 원본 질의로 검색 (Hybrid BM25+Chroma → Cohere Rerank)
-                    # categories를 넘겨 benefit_keywords 사전 필터 적용:
-                    #   추출된 카테고리 label과 일치하는 혜택을 가진 카드만 Chroma 검색 대상으로 한정
-                    #   BM25는 필터 미지원이라 전체 검색 후 앙상블, 충분히 안 나오면 폴백
-                    recommended_cards, retrieved_docs, filter_applied = (
-                        search_similar_cards(prompt, categories=categories, top_k=3)
+                    # [STEP 2] 가중 쿼리로 검색 (BM25 + Chroma → Cohere Rerank)
+                    recommended_cards, retrieved_docs = search_similar_cards(
+                        prompt, analysis=analysis, top_k=3
                     )
 
                     # [STEP 3] LLM 응답 생성 (page_content 기반 풍부한 context)
                     bot_reply, llm_prompt = generate_chat_response(
-                        prompt, retrieved_docs
+                        prompt, retrieved_docs, categories
                     )
 
                     st.markdown(bot_reply)
@@ -659,17 +635,8 @@ def main():
                     with st.expander("🔍 디버그 로그"):
                         st.markdown("**① 추출된 소비 패턴 카테고리**")
                         st.json(categories)
-                        st.markdown("**② 벡터 검색 쿼리 / benefit 필터 적용 여부**")
-                        st.code(prompt, language="text")
-                        filter_labels = [
-                            c["label"] for c in categories if c.get("label")
-                        ]
-                        if filter_applied:
-                            st.success(f"benefit_keywords 필터 적용됨: {filter_labels}")
-                        else:
-                            st.warning(
-                                f"benefit 필터 폴백 → 전체 검색 (추출 카테고리: {filter_labels})"
-                            )
+                        st.markdown("**② search_profile**")
+                        st.code(analysis.get("search_profile", ""), language="text")
                         st.markdown("**③ 검색된 카드**")
                         st.write([c["card_name"] for c in recommended_cards])
                         st.markdown(
