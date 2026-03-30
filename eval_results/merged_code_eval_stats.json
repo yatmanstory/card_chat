@@ -1,0 +1,42 @@
+{
+  "3.5Turbo_vs_4o": {
+    "dataset": "3.5Turbo_vs_4o",
+    "model_x": "model_c",
+    "model_y": "model_b",
+    "total_runs": 45,
+    "summary": {
+      "model_c_avg_sim": 0.7769,
+      "model_b_avg_sim": 0.7912,
+      "model_c_avg_recall": 0.0,
+      "model_b_avg_recall": 0.0889,
+      "model_c_sim_winrate_pct": 37.8,
+      "model_b_sim_winrate_pct": 62.2
+    },
+    "persona_details": [
+      {
+        "persona": "10대 박열심",
+        "total_runs": 15,
+        "model_c_avg_sim": 0.8039,
+        "model_b_avg_sim": 0.7644,
+        "model_c_avg_recall": 0.0,
+        "model_b_avg_recall": 0.0667
+      },
+      {
+        "persona": "50대 맞벌이 부부 김현우·이수진",
+        "total_runs": 15,
+        "model_c_avg_sim": 0.8102,
+        "model_b_avg_sim": 0.7995,
+        "model_c_avg_recall": 0.0,
+        "model_b_avg_recall": 0.2
+      },
+      {
+        "persona": "60대 김피트",
+        "total_runs": 15,
+        "model_c_avg_sim": 0.7167,
+        "model_b_avg_sim": 0.8096,
+        "model_c_avg_recall": 0.0,
+        "model_b_avg_recall": 0.0
+      }
+    ]
+  }
+}

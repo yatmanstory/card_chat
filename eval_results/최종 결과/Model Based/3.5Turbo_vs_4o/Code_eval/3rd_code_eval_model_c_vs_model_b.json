@@ -1,0 +1,137 @@
+[
+  {
+    "persona":"50대 맞벌이 부부 김현우·이수진",
+    "run":1,
+    "sim_x":0.8131501079,
+    "sim_y":0.7627111673,
+    "recall_x":0.0,
+    "recall_y":0.0,
+    "sim_winner":"model_c"
+  },
+  {
+    "persona":"50대 맞벌이 부부 김현우·이수진",
+    "run":2,
+    "sim_x":0.8117480874,
+    "sim_y":0.7503659129,
+    "recall_x":0.0,
+    "recall_y":0.0,
+    "sim_winner":"model_c"
+  },
+  {
+    "persona":"50대 맞벌이 부부 김현우·이수진",
+    "run":3,
+    "sim_x":0.8080183268,
+    "sim_y":0.7472068667,
+    "recall_x":0.0,
+    "recall_y":0.0,
+    "sim_winner":"model_c"
+  },
+  {
+    "persona":"50대 맞벌이 부부 김현우·이수진",
+    "run":4,
+    "sim_x":0.8074190021,
+    "sim_y":0.7424092293,
+    "recall_x":0.0,
+    "recall_y":0.0,
+    "sim_winner":"model_c"
+  },
+  {
+    "persona":"50대 맞벌이 부부 김현우·이수진",
+    "run":5,
+    "sim_x":0.810140729,
+    "sim_y":0.7518953085,
+    "recall_x":0.0,
+    "recall_y":0.0,
+    "sim_winner":"model_c"
+  },
+  {
+    "persona":"60대 김피트",
+    "run":1,
+    "sim_x":0.7147674561,
+    "sim_y":0.8243783116,
+    "recall_x":0.0,
+    "recall_y":0.0,
+    "sim_winner":"model_b"
+  },
+  {
+    "persona":"60대 김피트",
+    "run":2,
+    "sim_x":0.7366046309,
+    "sim_y":0.8168991208,
+    "recall_x":0.0,
+    "recall_y":0.0,
+    "sim_winner":"model_b"
+  },
+  {
+    "persona":"60대 김피트",
+    "run":3,
+    "sim_x":0.7022510171,
+    "sim_y":0.801579535,
+    "recall_x":0.0,
+    "recall_y":0.0,
+    "sim_winner":"model_b"
+  },
+  {
+    "persona":"60대 김피트",
+    "run":4,
+    "sim_x":0.7154445648,
+    "sim_y":0.8168991208,
+    "recall_x":0.0,
+    "recall_y":0.0,
+    "sim_winner":"model_b"
+  },
+  {
+    "persona":"60대 김피트",
+    "run":5,
+    "sim_x":0.719847858,
+    "sim_y":0.8168991208,
+    "recall_x":0.0,
+    "recall_y":0.0,
+    "sim_winner":"model_b"
+  },
+  {
+    "persona":"10대 박열심",
+    "run":1,
+    "sim_x":0.8059285879,
+    "sim_y":0.7285816669,
+    "recall_x":0.0,
+    "recall_y":0.0,
+    "sim_winner":"model_c"
+  },
+  {
+    "persona":"10대 박열심",
+    "run":2,
+    "sim_x":0.8059854507,
+    "sim_y":0.7317328453,
+    "recall_x":0.0,
+    "recall_y":0.0,
+    "sim_winner":"model_c"
+  },
+  {
+    "persona":"10대 박열심",
+    "run":3,
+    "sim_x":0.800989747,
+    "sim_y":0.7073757052,
+    "recall_x":0.0,
+    "recall_y":0.0,
+    "sim_winner":"model_c"
+  },
+  {
+    "persona":"10대 박열심",
+    "run":4,
+    "sim_x":0.8061187267,
+    "sim_y":0.7258743644,
+    "recall_x":0.0,
+    "recall_y":0.0,
+    "sim_winner":"model_c"
+  },
+  {
+    "persona":"10대 박열심",
+    "run":5,
+    "sim_x":0.805970192,
+    "sim_y":0.7324358821,
+    "recall_x":0.0,
+    "recall_y":0.0,
+    "sim_winner":"model_c"
+  }
+]
