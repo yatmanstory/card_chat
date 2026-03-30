@@ -4,6 +4,9 @@ __pycache__/
 .venv/
 .env
 .vscode/
+docs/
+models/
+evals/
 
 # ChromaDB 벡터 스토어 (자동 생성, 대용량)
 VectorStores_Card/
