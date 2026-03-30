@@ -130,7 +130,7 @@ def extract_consumption_pattern(user_text):
         if "categories" in data:
             data["categories"] = sorted(
                 data["categories"], key=lambda x: x.get("percent", 0), reverse=True
-            )[:3]
+            )[:4]
         return data
     except (json.JSONDecodeError, KeyError):
         return {"categories": [], "search_profile": user_text}
@@ -230,7 +230,7 @@ def search_similar_cards(query, analysis=None, top_k=3):
 
         docs = cohere_retriever.invoke(weighted_query)
         filtered_docs = _filter_docs_to_top_cards(docs, top_k=top_k)
-        cards = _docs_to_cards(docs)[:top_k]
+        cards = _docs_to_cards(filtered_docs)[:top_k]
         return cards, filtered_docs
 
     except Exception as e:
@@ -443,7 +443,11 @@ def render_mindmap_tab():
             width="100%",
             height=550,
             directed=False,
-            physics={"enabled": True, "stabilization": {"iterations": 200}},
+            physics={
+                "enabled": True,
+                "stabilization": {"iterations": 200, "fit": True},
+            },
+            fitAll=True,
         )
         clicked_id = agraph(nodes=nodes, edges=edges, config=config)
 
@@ -496,7 +500,7 @@ def render_mindmap_tab():
                     bg_style = (
                         f"background-image: url('{card.get('image_url')}'); background-size: cover; background-position: center;"
                         if card.get("image_url")
-                        else f"background: '#ccc');"
+                        else f"background: '#ccc';"
                     )
 
                     st.markdown(
