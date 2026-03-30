@@ -1,0 +1,128 @@
+{
+  "Cohere Vs Custom": {
+    "dataset": "Cohere Vs Custom",
+    "model_x": {
+      "key": "model_a",
+      "short": "BM25+Cohere"
+    },
+    "model_y": {
+      "key": "model_b",
+      "short": "MultiQuery"
+    },
+    "file_count": 3,
+    "summary": {
+      "total_runs": 150,
+      "valid_runs": 99,
+      "errors": 51,
+      "BM25+Cohere_wins": 47,
+      "MultiQuery_wins": 50,
+      "ties": 2,
+      "BM25+Cohere_winrate_pct": 47.5,
+      "MultiQuery_winrate_pct": 50.5,
+      "BM25+Cohere_winrate_ci_95": [
+        37.9,
+        57.2
+      ],
+      "MultiQuery_winrate_ci_95": [
+        40.8,
+        60.1
+      ],
+      "BM25+Cohere_avg_score": 3.15,
+      "BM25+Cohere_std_score": 0.81,
+      "MultiQuery_avg_score": 3.11,
+      "MultiQuery_std_score": 0.95
+    },
+    "persona_details": [
+      {
+        "persona": "10대 박열심",
+        "total_runs": 2,
+        "BM25+Cohere_wins": 1,
+        "MultiQuery_wins": 1,
+        "ties": 0,
+        "BM25+Cohere_avg_score": 3.0,
+        "MultiQuery_avg_score": 2.5
+      },
+      {
+        "persona": "20대 김서연 대학생",
+        "total_runs": 15,
+        "BM25+Cohere_wins": 3,
+        "MultiQuery_wins": 12,
+        "ties": 0,
+        "BM25+Cohere_avg_score": 2.8,
+        "MultiQuery_avg_score": 3.8
+      },
+      {
+        "persona": "20대 김틱톡",
+        "total_runs": 0,
+        "BM25+Cohere_wins": 0,
+        "MultiQuery_wins": 0,
+        "ties": 0,
+        "BM25+Cohere_avg_score": 0,
+        "MultiQuery_avg_score": 0
+      },
+      {
+        "persona": "30대 김노리 직장인",
+        "total_runs": 14,
+        "BM25+Cohere_wins": 5,
+        "MultiQuery_wins": 9,
+        "ties": 0,
+        "BM25+Cohere_avg_score": 2.5,
+        "MultiQuery_avg_score": 2.93
+      },
+      {
+        "persona": "30대 박지은 직장인",
+        "total_runs": 15,
+        "BM25+Cohere_wins": 15,
+        "MultiQuery_wins": 0,
+        "ties": 0,
+        "BM25+Cohere_avg_score": 3.93,
+        "MultiQuery_avg_score": 2.27
+      },
+      {
+        "persona": "30대 정유진 프리랜서 디자이너",
+        "total_runs": 15,
+        "BM25+Cohere_wins": 9,
+        "MultiQuery_wins": 6,
+        "ties": 0,
+        "BM25+Cohere_avg_score": 3.4,
+        "MultiQuery_avg_score": 2.87
+      },
+      {
+        "persona": "30대 피우리",
+        "total_runs": 3,
+        "BM25+Cohere_wins": 0,
+        "MultiQuery_wins": 3,
+        "ties": 0,
+        "BM25+Cohere_avg_score": 3.0,
+        "MultiQuery_avg_score": 4.0
+      },
+      {
+        "persona": "40대 최성호 가장",
+        "total_runs": 15,
+        "BM25+Cohere_wins": 5,
+        "MultiQuery_wins": 10,
+        "ties": 0,
+        "BM25+Cohere_avg_score": 2.93,
+        "MultiQuery_avg_score": 3.27
+      },
+      {
+        "persona": "50대 맞벌이 부부 김현우·이수진",
+        "total_runs": 15,
+        "BM25+Cohere_wins": 8,
+        "MultiQuery_wins": 5,
+        "ties": 2,
+        "BM25+Cohere_avg_score": 3.47,
+        "MultiQuery_avg_score": 3.27
+      },
+      {
+        "persona": "60대 김피트",
+        "total_runs": 5,
+        "BM25+Cohere_wins": 1,
+        "MultiQuery_wins": 4,
+        "ties": 0,
+        "BM25+Cohere_avg_score": 2.8,
+        "MultiQuery_avg_score": 3.6
+      }
+    ]
+  }
+}
